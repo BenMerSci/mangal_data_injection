@@ -1,6 +1,7 @@
 # Templet filled for CapdeCreus data by I. Bartomeus using:
 
 # Ben: Do I understand that you don't want to inject the data from the last 6 network?: MED3CA, MED4CA, MIQ1OP, MIQ2OP, SEL1OP, SEL2OP., or it's a "mistake" in the ntw_data where you loop over only the 6 first network?
+# Nacho: A mistake, I want all 12 in :D
 
 # R Guidelines / Template for Mangal data injection
 # More information on Mangal and API Endpoints at https://mangal.io and https://mangal.io/doc/api/
@@ -16,8 +17,8 @@
 # Fill the information in the lists below to the best of your knowledge
 
 #load data needed later on: 
-data <- read.csv("data/CapCreusNtw.csv")
-head(data)
+data <- read.csv("data/CapCreusNtw.csv", stringsAsFactors = FALSE)
+#head(data)
 
 
 # Reference
@@ -54,8 +55,8 @@ user <- list(name = "Ignasi Bartomeus",
 # Dataset
 dataset <- list(name        = "Bartomeus_2005",
                 date        = "2005-00-00",
-                description = "Plant-pollinator networks collected in Mediterranean scrublands, some of them invaded 
-                                by exotic species", #Ex: "Food web structure of rocky intertidal communities in New England and Washington"
+                description = "Plant-pollinator networks collected in Mediterranean scrublands. There are six pairs of netwoks, and each pair has one invaded 
+                                by exotic species site and a control site separated ~ 200 m", #Ex: "Food web structure of rocky intertidal communities in New England and Washington"
                 public      = TRUE) #Is this available publicly
 
 # Network
@@ -66,12 +67,12 @@ ntw_data <- data.frame(name = c("BAT1CA", "BAT2CA", "FRA1OP", "FRA2OP",
                                 "MED1CA", "MED2CA", "MED3CA", "MED4CA", 
                                 "MIQ1OP", "MIQ2OP", "SEL1OP", "SEL2OP"),
                        network_description = paste("plant-pollintor network sampled in Cap de Creus region, Spain", 
-                                                   c("", ", invaded by Carpobrotus affine acinaciformis", 
-                                                         "", ", invaded by Opuntia stricta",
-                                                         "", ", invaded by Carpobrotus affine acinaciformis",
-                                                         "", ", invaded by Carpobrotus affine acinaciformis",
-                                                         "", ", invaded by Opuntia stricta",
-                                                         "", ", invaded by Opuntia stricta"), sep = ""),
+                                                   c("", "; this site is invaded by Carpobrotus affine acinaciformis", 
+                                                         "", "; this site is invaded by Opuntia stricta",
+                                                         "", "; this site is invaded by Carpobrotus affine acinaciformis",
+                                                         "", "; this site is invaded by Carpobrotus affine acinaciformis",
+                                                         "", "; this site is invaded by Opuntia stricta",
+                                                         "", "; this site is invaded by Opuntia stricta"), sep = ""),
                        latitude = c(42.352,
                                     42.354,
                                     42.417,
@@ -99,7 +100,7 @@ ntw_data <- data.frame(name = c("BAT1CA", "BAT2CA", "FRA1OP", "FRA2OP",
 
 head(ntw_data)
 
-for(i in 1:6){ ##WARNING: Now ir overscripts network each time, so injection has to bee added into the loop. Ben: That is exactly what I used to do!
+for(i in 1:12){ ##WARNING: Now it overscripts network each time, so injection has to bee added into the loop. Ben: That is exactly what I used to do!
   network <- list(name = paste0("Bartomeus_2008_", ntw_data$name[i]), # Just added the year after the name.
                   date = "2005-00-00",
                   lat = ntw_data$latitude[i], # Latitude
@@ -134,7 +135,7 @@ attribute <- list( name        = "Frequency", # Interaction: "Presence/Absence",
 #NOTE from NACHO: I am bit lost here. I can't find where the interactions are stored. 
 #would it work something like
 # Ben: Yes, with slight changes!
-interaction_data <- data.frame(network= data$site, #if needed inject per network looping through the 6 sites
+interaction_data <- data.frame(network= data$site, #if needed inject per network looping through the 12 sites
                                sp_taxon_1 = data$gen_sp,
                                sp_taxon_2 = data$plant,
                                value = data$freq,
@@ -167,11 +168,13 @@ interaction <- list(direction     = "UNDIRECTED", # Direction of the interaction
 library(taxize)
 # Creating the node dataframe for each network. First column is the original_name found in the network, and second column (name_clear) are the names resolved i.e.: without "sp" etc.
 nodes <- interaction_data
-nodes <- lapply(nodes, function(x) unique(c(x$sp_taxon_1, x$sp_taxon_2)))
+#nodes <- lapply(nodes, function(x) unique(c(x$sp_taxon_1, x$sp_taxon_2))) #NACHO: This is not working for me¿? Returns numbers, not taxon names
+nodes <- lapply(nodes, function(x) unique(x[,c(1,2)])) #This works
 nodes_temp <- lapply(nodes, function(x) gsub("[A-Z]{1}[[:digit:]]{1,}$", "", x)) # Removing the capital letters/numbers at the end, and the "sp".
 nodes_temp <- lapply(nodes_temp, function(x) gsub(" sp", "", x))
+#This last two lapply do not work (give indexes, not names) but I can't figure why¿?
 nodes <- purrr::map2(nodes, nodes_temp, ~cbind(as.data.frame(.x), as.data.frame(.y))) # Cbinding the two back together into a dataframe
-
+#head(nodes)
 
 # Getting the name resolved
 resolved_nodes <- lapply(nodes, function(x) {as.data.frame(taxize::gnr_resolve(x[,".y"], canonical = TRUE, highestscore = TRUE, best_match_only = TRUE))})
@@ -180,6 +183,7 @@ NA_nodes <- lapply(resolved_nodes, function(x) attributes(x)$not_known) # Gettin
 # Manually fixing the taxons in the second column that were not found with taxize:gnr_resolve and are stored in NA_nodes.
 # Coul you check the taxonomy modifications I made, and point modify it if it's not correct?
 nodes <- lapply(nodes, function(x) {x[,".y"] <- stringr::str_replace_all(x[,".y"], c("Psylotrix viridicoerulea" = "Psilotrix viridicoerulea","Chryptocephalus" = "Cryptocephalus", "Criptocephalus" = "Cryptocephalus", "Sphaerophoeria" = "Sphaerophoria", "Equium sabulicola" = "Echium sabulicola", "Dorichnium pentaphylum" = "Dorycnium pentaphyllum", "Myrabilis quadripunctata" = "Mylabris quadripunctata")); return(x)})
+#Nacho: yes, all modifications are correct, THANKS!
 
 # Regetting the name resolved
 resolved_nodes <- lapply(nodes, function(x) {as.data.frame(taxize::gnr_resolve(x[,".y"], canonical = TRUE, highestscore = TRUE, best_match_only = TRUE))})
