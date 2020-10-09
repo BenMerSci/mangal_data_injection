@@ -27,8 +27,8 @@ reference <- list(doi = "10.1007/s00442-007-0946-1", # desirable
                   pmid = "null", # Might not have one? 
                   paper_url = "https://doi.org/10.1007/s00442-007-0946-1", # desirable
                   data_url = "null", 
-                  author = "Ignasi Bartomeus",
-                  year = "2005",
+                  first_author = "Ignasi Bartomeus",
+                  year = "2008",
                   bibtex = "@article{bartomeus_contrasting_2008,
 	                          title = {Contrasting effects of invasive plants in plant-pollinator networks},
 	                          volume = {155},
@@ -55,8 +55,7 @@ user <- list(name = "Ignasi Bartomeus",
 # Dataset
 dataset <- list(name        = "Bartomeus_2005",
                 date        = "2005-00-00",
-                description = "Plant-pollinator networks collected in Mediterranean scrublands. There are six pairs of netwoks, and each pair has one invaded 
-                                by exotic species site and a control site separated ~ 200 m", #Ex: "Food web structure of rocky intertidal communities in New England and Washington"
+                description = "Plant-pollinator networks collected in Mediterranean scrublands. There are six pairs of netwoks, and each pair has one invaded by exotic species site and a control site separated ~ 200 m", #Ex: "Food web structure of rocky intertidal communities in New England and Washington"
                 public      = TRUE) #Is this available publicly
 
 # Network
@@ -100,23 +99,12 @@ ntw_data <- data.frame(name = c("BAT1CA", "BAT2CA", "FRA1OP", "FRA2OP",
 
 head(ntw_data)
 
-for(i in 1:12){ ##WARNING: Now it overscripts network each time, so injection has to bee added into the loop. Ben: That is exactly what I used to do!
-  network <- list(name = paste0("Bartomeus_2008_", ntw_data$name[i]), # Just added the year after the name.
-                  date = "2005-00-00",
-                  lat = ntw_data$latitude[i], # Latitude
-                  lon = ntw_data$longitude[i], # Longitude
-                  srid = 3857, # Spatial reference system
-                  description = ntw_data$network_description[i], # Might bring more precision than the dataset description ex: "Food web structure of an exposed rocky shore community, Pemaquid point, New England"
-                  public = TRUE, # Are the data publicly available
-                  all_interactions = FALSE) # Is the network recording ALL presence AND absence of interactions
-}
-
 # Attribute
 # Used to describe an attribute that can be linked to Interaction table, Trait table and Environment table.
 attribute <- list( name        = "Frequency", # Interaction: "Presence/Absence", "Frequency" etc., Trait: "body length", "mass" etc., Environment: "precipitation" etc.
                    table_owner = "interaction", # %in% c("interaction","trait","environment") 
                    description = "Frequency of interaction", # Interaction: "Presence or absence of interaction", Trait: "Body length of the organism", Environment: "Quantity of precipitation".
-                   unit        = "Number of visits recorded per 6 minuts") # necessary if  it's a Trait or Environment attribute, facultative if Interaction attribute (ex: no units for Presence/Absence)
+                   unit        = "Number of visits recorded per 6 minutes") # necessary if  it's a Trait or Environment attribute, facultative if Interaction attribute (ex: no units for Presence/Absence)
 
 ####################################################################################################
 
@@ -145,16 +133,6 @@ interaction_data$date <- as.Date(interaction_data$date, format = "%Y-%m-%d") # B
 interaction_data <- split(interaction_data, f = interaction_data$network, drop = TRUE) # Ben : The information in the dataframe is exactly what we need. What I used to do though was separate each dataframe per network into a list, so I could embedded the injection of the network data and the interaction data in the same "for loop", as the "i" will get the related data from network and interaction.
 interaction_data <- lapply(interaction_data, function(x) {x[,-1]}) # Ben: Remove the first column as we don't need it in the database. It's going to be related by a Foreign Key, generated when injected.
 
-# Ben: I removed the date field, because it was a field that varied between interaction, so I added it to the interaction dataframe.
-interaction <- list(direction     = "UNDIRECTED", # Direction of the interaction
-                    type          = "MUTUALISM",
-                    method        = "OBSERVATION", # The general method with which the interaction was recorded
-                    description   = "null", # Not necessary
-                    public        = TRUE, # Are the data publicly available
-                    lat           = ntw_data[i,"lat"], # Latitude #QUESTION: Can we extract this from the network table? Ben: Yes that is exactly what I used to do!!!
-                    lon           = ntw_data[i, "lon"], # Longitude
-                    srid          = 3857) # Spatial reference system
-
 ####################################################################################################
 
 # Node
@@ -168,8 +146,8 @@ interaction <- list(direction     = "UNDIRECTED", # Direction of the interaction
 library(taxize)
 # Creating the node dataframe for each network. First column is the original_name found in the network, and second column (name_clear) are the names resolved i.e.: without "sp" etc.
 nodes <- interaction_data
-#nodes <- lapply(nodes, function(x) unique(c(x$sp_taxon_1, x$sp_taxon_2))) #NACHO: This is not working for me¿? Returns numbers, not taxon names
-nodes <- lapply(nodes, function(x) unique(x[,c(1,2)])) #This works
+nodes <- lapply(nodes, function(x) unique(c(x$sp_taxon_1, x$sp_taxon_2))) #NACHO: This is not working for me¿? Returns numbers, not taxon names
+#nodes <- lapply(nodes, function(x) unique(x[,c(1,2)])) #This works
 nodes_temp <- lapply(nodes, function(x) gsub("[A-Z]{1}[[:digit:]]{1,}$", "", x)) # Removing the capital letters/numbers at the end, and the "sp".
 nodes_temp <- lapply(nodes_temp, function(x) gsub(" sp", "", x))
 #This last two lapply do not work (give indexes, not names) but I can't figure why¿?
@@ -182,7 +160,7 @@ NA_nodes <- lapply(resolved_nodes, function(x) attributes(x)$not_known) # Gettin
 
 # Manually fixing the taxons in the second column that were not found with taxize:gnr_resolve and are stored in NA_nodes.
 # Coul you check the taxonomy modifications I made, and point modify it if it's not correct?
-nodes <- lapply(nodes, function(x) {x[,".y"] <- stringr::str_replace_all(x[,".y"], c("Psylotrix viridicoerulea" = "Psilotrix viridicoerulea","Chryptocephalus" = "Cryptocephalus", "Criptocephalus" = "Cryptocephalus", "Sphaerophoeria" = "Sphaerophoria", "Equium sabulicola" = "Echium sabulicola", "Dorichnium pentaphylum" = "Dorycnium pentaphyllum", "Myrabilis quadripunctata" = "Mylabris quadripunctata")); return(x)})
+nodes <- lapply(nodes, function(x) {x[,".y"] <- stringr::str_replace_all(x[,".y"], c("Psylotrix viridicoerulea" = "Psilotrix viridicoerulea","Chryptocephalus" = "Cryptocephalus", "Criptocephalus" = "Cryptocephalus", "Sphaerophoeria" = "Sphaerophoria", "Equium sabulicola" = "Echium sabulicola", "Dorichnium pentaphylum" = "Dorycnium pentaphyllum", "Myrabilis quadripunctata" = "Mylabris quadripunctata", "Sirphidae" = "Syrphidae", "Vanesa atlantica" = "Vanessa atalanta", "Lassiopogon" = "Lasiopogon")); return(x)})
 #Nacho: yes, all modifications are correct, THANKS!
 
 # Regetting the name resolved
@@ -201,6 +179,7 @@ nodes <- lapply(nodes, function(x) `colnames<-`(x, c("original_name", "name_clea
 # So here I rechanged to their original_name the nodes that were downgraded to a lesser resolved taxonomy
 nodes[[2]][which(nodes[[2]]$name_clear == "Carpobrotus"),"name_clear"] <- "Carpobrotus affinis acinaciformis"
 nodes[[6]][which(nodes[[6]]$name_clear == "Carpobrotus"),"name_clear"] <- "Carpobrotus affinis acinaciformis"
+nodes[[8]][which(nodes[[8]]$name_clear == "Carpobrotus"),"name_clear"] <- "Carpobrotus affinis acinaciformis"
 
 ####################################################################################################
 
@@ -208,7 +187,7 @@ nodes[[6]][which(nodes[[6]]$name_clear == "Carpobrotus"),"name_clear"] <- "Carpo
 # Check which taxon are already in the Mangal Taxonomy Endpoint
 # We will only add the ones that aren't already in Mangal
 
-taxa_back <- unique(do.call(rbind, nodes[1:6])$name_clear)
+taxa_back <- unique(do.call(rbind, nodes)$name_clear)
 
 server <- "https://mangal.io"
 taxa_back_df <- data.frame()
@@ -227,6 +206,9 @@ taxa_back_df[, "bold"] <- NA
 taxa_back_df[, "eol"]  <- NA
 taxa_back_df[, "tsn"]  <- NA
 taxa_back_df[, "ncbi"] <- NA
+taxa_back_df[, "gbif"] <- NA
+taxa_back_df[, "col"] <- NA
+taxa_back_df[, "rank"] <- NA
 
 # Loop to get the IDs for each taxon
 for (i in 1:nrow(taxa_back_df)) {
@@ -236,6 +218,10 @@ for (i in 1:nrow(taxa_back_df)) {
   try (expr = (taxa_back_df[i, "ncbi"] <- get_uid(taxa_back_df[i, 1], row = 5, verbose = FALSE)[1]), silent = TRUE)
 }
 
+for(i in 1:nrow(taxa_back_df)){
+  try(expr = taxa_back_df[i, "gbif"] <- as.gbifid(get_gbifid(taxa_back_df[i, "name"])))
+
+}
 ########################################################################################################
 
 # Environment
@@ -273,3 +259,44 @@ for (i in 1:nrow(taxa_back_df)) {
 # Third column is the trait value ("value")
 
 ##########################################################################################################
+
+# Injection
+POST_attribute(attr = attribute)
+
+POST_ref(ref = reference)
+
+POST_users(users = user)
+
+POST_dataset(dataset = dataset, users = user, ref = reference)
+
+POST_taxonomy(taxo = taxa_back_df)
+
+
+for(i in 1:12){ ##WARNING: Now it overscripts network each time, so injection has to bee added into the loop. Ben: That is exactly what I used to do!
+  network <- list(name = paste0("Bartomeus_2008_", ntw_data$name[i]), # Just added the year after the name.
+                  date = "2005-00-00",
+                  lat = ntw_data$latitude[i], # Latitude
+                  lon = ntw_data$longitude[i], # Longitude
+                  srid = 3857, # Spatial reference system
+                  description = ntw_data$network_description[i], # Might bring more precision than the dataset description ex: "Food web structure of an exposed rocky shore community, Pemaquid point, New England"
+                  public = TRUE, # Are the data publicly available
+                  all_interactions = FALSE) # Is the network recording ALL presence AND absence of interactions
+
+# Ben: I removed the date field, because it was a field that varied between interaction, so I added it to the interaction dataframe.
+  interaction <- list(direction     = "UNDIRECTED", # Direction of the interaction
+                      type          = "MUTUALISM",
+                      method        = "OBSERVATION", # The general method with which the interaction was recorded
+                      description   = "null", # Not necessary
+                      public        = TRUE, # Are the data publicly available
+                      lat           = ntw_data[i,"lat"], # Latitude #QUESTION: Can we extract this from the network table? Ben: Yes that is exactly what I used to do!!!
+                      lon           = ntw_data[i, "lon"], # Longitude
+                      srid          = 3857) # Spatial reference system
+
+  POST_network(network_lst = network, dataset = dataset, users = user)
+  
+  POST_node(node_df = nodes[[i]], network = network)
+  
+  POST_interaction(inter_df = interaction_data[[i]], inter = interaction, attr = attribute, users = user, network = network)
+}
+
+

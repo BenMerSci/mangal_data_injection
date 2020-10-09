@@ -79,12 +79,11 @@ for(i in 1:16){ ##WARNING: Now it overscripts network each time, so injection ha
                   description = ntw_data$network_description[i], # Might bring more precision than the dataset description ex: "Food web structure of an exposed rocky shore community, Pemaquid point, New England"
                   public = TRUE, # Are the data publicly available
                   all_interactions = FALSE) # Is the network recording ALL presence AND absence of interactions
+                  print(network$name)
 }
 
 # Attribute
 # Used to describe an attribute that can be linked to Interaction table, Trait table and Environment table.
-head(all_interactions)
-
 attribute <- list( name        = "Frequency", # Interaction: "Presence/Absence", "Frequency" etc., Trait: "body length", "mass" etc., Environment: "precipitation" etc.
                    table_owner = "interaction", # %in% c("interaction","trait","environment") 
                    description = "Frequency of interaction in number of flowers visited per observation recorded along 100m, 30 min transects. Each transect was visited seven times over one season", # Interaction: "Presence or absence of interaction", Trait: "Body length of the organism", Environment: "Quantity of precipitation".
@@ -104,6 +103,8 @@ attribute <- list( name        = "Frequency", # Interaction: "Presence/Absence",
 # This way, we "cbind" a column named "type", and on each line where we have predation, the value of the column "type" will be "predation". (Same logic for the herbivory)
 # If an argument varies in a network, remove it from the list below. (Because in the injection process, each argument is cbinded to the long format interaction matrix)
 all_interactions <- subset(all_interactions, Out == "transect") #remove out of transect observations.
+all_interactions <- all_interactions[!(all_interactions$Plant_gen_sp == "NA NA"),]
+all_interactions[which(is.na(all_interactions$Frequency)),"Frequency"] <- 1
 head(all_interactions)
 
 interaction_data <- data.frame(network= all_interactions$Site_ID, #if needed inject per network looping through the 12 sites
@@ -116,7 +117,7 @@ interaction_data <- data.frame(network= all_interactions$Site_ID, #if needed inj
 
 interaction_data$date <- as.Date(interaction_data$date, format = "%Y-%m-%d") # Ben: Reformated the date to have the 0 for the months and days.
 interaction_data <- split(interaction_data, f = interaction_data$network, drop = TRUE) # Ben : The information in the dataframe is exactly what we need. What I used to do though was separate each dataframe per network into a list, so I could embedded the injection of the network data and the interaction data in the same "for loop", as the "i" will get the related data from network and interaction.
-#interaction_data <- lapply(interaction_data, function(x) {x[,-1]}) # Probably you need to drop other variables.
+interaction_data <- lapply(interaction_data, function(x) {x[,-1]}) # Probably you need to drop other variables.
 
 # Ben: I removed the date field, because it was a field that varied between interaction, so I added it to the interaction dataframe.
 interaction <- list(direction     = "UNDIRECTED", # Direction of the interaction
@@ -142,8 +143,11 @@ library(taxize)
 # Creating the node dataframe for each network. First column is the original_name found in the network, and second column (name_clear) are the names resolved i.e.: without "sp" etc.
 nodes <- interaction_data
 nodes <- lapply(nodes, function(x) unique(c(x$sp_taxon_1, x$sp_taxon_2)))
-nodes_temp <- lapply(nodes, function(x) gsub("[A-Z]{1}[[:digit:]]{1,}$", "", x)) # Removing the capital letters/numbers at the end, and the "sp".
-nodes_temp <- lapply(nodes_temp, function(x) gsub(" sp", "", x))
+#nodes_temp <- lapply(nodes, function(x) gsub("[A-Z]{1}[[:digit:]]{1,}$", "", x)) # Removing the capital letters/numbers at the end, and the "sp".
+nodes_temp <- lapply(nodes, function(x) gsub(" sp", "", x))
+nodes_temp <- lapply(nodes_temp, function(x) gsub(" NA", "", x))
+nodes_temp <- lapply(nodes_temp, function(x) gsub(" morpho1", "", x))
+nodes_temp <- lapply(nodes_temp, function(x) gsub(" morpho2", "", x))
 nodes <- purrr::map2(nodes, nodes_temp, ~cbind(as.data.frame(.x), as.data.frame(.y))) # Cbinding the two back together into a dataframe
 
 #NACHO: The nodes object is full of numbres, not characters... but I can't spot why.
@@ -152,27 +156,11 @@ nodes <- purrr::map2(nodes, nodes_temp, ~cbind(as.data.frame(.x), as.data.frame(
 resolved_nodes <- lapply(nodes, function(x) {as.data.frame(taxize::gnr_resolve(x[,".y"], canonical = TRUE, highestscore = TRUE, best_match_only = TRUE))})
 NA_nodes <- lapply(resolved_nodes, function(x) attributes(x)$not_known) # Getting the taxons that aren't recognized. Will check them manually on ITIS/GBIF/Internet..
 
-# Manually fixing the taxons in the second column that were not found with taxize:gnr_resolve and are stored in NA_nodes.
-# Coul you check the taxonomy modifications I made, and point modify it if it's not correct?
-nodes <- lapply(nodes, function(x) {x[,".y"] <- stringr::str_replace_all(x[,".y"], c("Psylotrix viridicoerulea" = "Psilotrix viridicoerulea","Chryptocephalus" = "Cryptocephalus", "Criptocephalus" = "Cryptocephalus", "Sphaerophoeria" = "Sphaerophoria", "Equium sabulicola" = "Echium sabulicola", "Dorichnium pentaphylum" = "Dorycnium pentaphyllum", "Myrabilis quadripunctata" = "Mylabris quadripunctata")); return(x)})
-#Nacho: yes, all modifications are correct, THANKS!
-
-# Regetting the name resolved
-resolved_nodes <- lapply(nodes, function(x) {as.data.frame(taxize::gnr_resolve(x[,".y"], canonical = TRUE, highestscore = TRUE, best_match_only = TRUE))})
 
 # Matching the name back into nodes
 nodes <- purrr::map2(nodes, resolved_nodes, ~dplyr::left_join(.x, .y, by = c(".y" = "user_supplied_name"))) # Matching back the resolved name to the original_name
 nodes <- lapply(nodes, function(x) x[,c(".x", "matched_name2")]) # Selecting only the column we need
 nodes <- lapply(nodes, function(x) `colnames<-`(x, c("original_name", "name_clear"))) # Changing column names
-
-# *** Have to be careful because taxize::gnr_resolve(), sometimes give back a resolved name that isn't as precise as the name we supplied ***
-# Example: in the second network, "Carpobrotus affinis acinaciformis" got downgraded to "Carpobrotus"
-# I found to still use taxize::gnr_resolve() and give a visual inspection after is still the fastest way to resolve that taxonomy to the best possible resolution (because most network don't have a lot of species, so a visual inspection is usually quick).
-# If you have an idea that could be faster please don't hesitate to share it with me!
-
-# So here I rechanged to their original_name the nodes that were downgraded to a lesser resolved taxonomy
-nodes[[2]][which(nodes[[2]]$name_clear == "Carpobrotus"),"name_clear"] <- "Carpobrotus affinis acinaciformis"
-nodes[[6]][which(nodes[[6]]$name_clear == "Carpobrotus"),"name_clear"] <- "Carpobrotus affinis acinaciformis"
 
 ####################################################################################################
 
